@@ -3,9 +3,10 @@
 // This entry builds on the starter baseline and improves it:
 //   - quality: routes each prompt to the free model that meets its requirements with the
 //     highest rating_milli (tie-break by model id ascending, for determinism);
-//   - failover: on any refused gateway call, tries the next eligible model in rating order,
-//     never spending another call on a model that has refused during this trial (429 or any
-//     other non-2xx / fetch throw), and reports the refusal trail on the response;
+//   - failover: on any refused gateway call, tries the next eligible model in rating order.
+//     Only a 429 cools a model down for the rest of the trial. A 401 is a key-level failure:
+//     the refusal is recorded and no further model is tried for that prompt. Any other
+//     non-2xx or fetch throw is recorded and the next model is tried, without cooling down;
 //   - catalog: keeps the fourteen free ids exactly as the starter lists them, once each.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -53,8 +54,8 @@ const brief = readBrief(PROMPT_FILE);
 const catalog: CatalogReport = buildCatalog(brief);
 /** Which prompt row the request now arriving is: the brief's prompts are in the client's arrival order. */
 let manifestIndex = 0;
-/** Free models that have refused during this trial: never dialled again for the rest of it. */
-const refusedModels = new Set<string>();
+/** Free models that refused with 429 during this trial: never dialled again for the rest of it. */
+const cooledDown = new Set<string>();
 
 function log(message: string): void {
   process.stderr.write(`aggregator: ${message}\n`);
@@ -109,12 +110,12 @@ function gatewayBody(body: Json, model: string): Json {
 }
 
 /**
- * The free models eligible to serve one request: those meeting the requirements, not refused during
- * this trial, ranked by rating_milli descending and then by model id ascending for determinism.
+ * The free models eligible to serve one request: those meeting the requirements, not cooled down
+ * during this trial, ranked by rating_milli descending and then by model id ascending for determinism.
  */
 function eligibleModels(requires: Requirement): ModelRow[] {
   return freeModels(brief)
-    .filter((model) => !refusedModels.has(model.id))
+    .filter((model) => !cooledDown.has(model.id))
     .filter((model) => meetsRequirements(requires, capabilitiesOf(model)))
     .sort((a, b) => {
       if (b.rating_milli !== a.rating_milli) return b.rating_milli - a.rating_milli;
@@ -122,10 +123,7 @@ function eligibleModels(requires: Requirement): ModelRow[] {
     });
 }
 
-/**
- * Dial the gateway's Chat Completions route for one model, returning the response. On any refusal
- * (non-2xx or fetch throw) the caller records the failure and moves to the next eligible model.
- */
+/** Dial the gateway's Chat Completions route for one model, returning the response. */
 async function dial(model: string, body: Json): Promise<Response> {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
@@ -157,8 +155,9 @@ function refusalCode(status: number, text: string): string {
 
 /**
  * Try every eligible model in rating order until one answers 2xx. Records each refusal (status, code,
- * model) and marks the model as refused for the rest of this trial. Returns the first successful
- * dialling, or null when every eligible model refused.
+ * model). Only a 429 cools a model down for the rest of this trial. A 401 is a key-level failure:
+ * the refusal is recorded and no further model is tried for this prompt. Any other non-2xx or fetch
+ * throw is recorded and the next model is tried, without cooling that model down.
  */
 async function dialWithFailover(
   buildBody: (model: string) => Json,
@@ -171,7 +170,6 @@ async function dialWithFailover(
       response = await dial(model.id, buildBody(model.id));
     } catch {
       refusals.push({ status: 0, code: 'fetch_error', model: model.id });
-      refusedModels.add(model.id);
       continue;
     }
     if (!response.ok || response.body === null) {
@@ -182,7 +180,13 @@ async function dialWithFailover(
         // Body unreadable: report with the status only.
       }
       refusals.push({ status: response.status, code: refusalCode(response.status, text), model: model.id });
-      refusedModels.add(model.id);
+      if (response.status === 429) {
+        cooledDown.add(model.id);
+        continue;
+      }
+      if (response.status === 401) {
+        return null;
+      }
       continue;
     }
     return { model: model.id, response, refusals };
