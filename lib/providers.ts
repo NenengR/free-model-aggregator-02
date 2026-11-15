@@ -269,8 +269,8 @@ export function meetsRequirements(requires: Requirement, caps: Capabilities): bo
  * origin differs between a live pass and its replay, and the catalog is part of the state export a
  * replay must reproduce byte for byte.
  *
- * This baseline lists every free model in the brief — exactly the fourteen dialable ids the catalog
- * column scores — so keep it that way: register this set and keep GET /v1/models (both auth headers)
+ * This baseline lists every free model in the brief, exactly the fourteen dialable ids the catalog
+ * column scores, so keep it that way: register this set and keep GET /v1/models (both auth headers)
  * exactly that set, since listing fewer loses the column as surely as listing more.
  */
 export function buildCatalog(brief: Brief): CatalogReport {
