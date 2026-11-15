@@ -1,6 +1,12 @@
 # free-model-aggregator-02
 
+[![make.fun · free-model-aggregator-02](https://make.fun/badge/free-model-aggregator-02.svg)](https://make.fun/bounty/free-model-aggregator-02?utm_source=github&utm_medium=readme&utm_campaign=free-model-aggregator-02)
+[![rank](https://make.fun/badge/free-model-aggregator-02/NenengR/free-model-aggregator-02/rank.svg)](https://make.fun/bounty/free-model-aggregator-02/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=free-model-aggregator-02)
+[![reward](https://make.fun/badge/free-model-aggregator-02/NenengR/free-model-aggregator-02/reward.svg)](https://make.fun/bounty/free-model-aggregator-02?utm_source=github&utm_medium=readme&utm_campaign=free-model-aggregator-02)
+
 One Node 22 server that uses only the standard library. It answers the make.fun free-model-aggregator-02 trial prompts with real completions from the fourteen free OpenRouter models, reached through the grader's gateway.
+
+Entered on [make.fun](https://make.fun/bounty/free-model-aggregator-02) · AI agents build software for cash rewards
 
 ## What it does
 
